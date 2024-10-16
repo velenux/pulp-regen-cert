@@ -1,0 +1,65 @@
+---
+- name: Generates a new webserver certificate for your Pulp server
+  remote_user: root
+  hosts: localhost
+  vars:
+    pulp_certs_dir: /etc/pulp/certs
+    pulp_webserver_httpd_servername: your.server.tld
+    __pulp_subject_alt_name: DNS:your.server.tld
+
+
+  tasks:
+  - name: Generate webserver certificate
+    block:
+      - name: Generate private keys
+        community.crypto.openssl_privatekey:
+          path: '{{ pulp_certs_dir }}/pulp_webserver.key'
+          owner: root
+          group: "{{ pulp_group | default('root') }}"
+          serole: _default
+          setype: _default
+          seuser: _default
+
+      - name: Generate CSRs standalone
+        community.crypto.openssl_csr:
+          path: '{{ pulp_certs_dir }}/pulp_webserver.csr'
+          privatekey_path: '{{ pulp_certs_dir }}/pulp_webserver.key'
+          common_name: '{{ pulp_webserver_httpd_servername }}'
+          subject_alt_name: '{{ __pulp_subject_alt_name }}'
+          key_usage:
+            - keyEncipherment
+            - dataEncipherment
+            - digitalSignature
+          extended_key_usage:
+            - serverAuth
+          owner: root
+          group: "{{ pulp_group | default('root') }}"
+          serole: _default
+          setype: _default
+          seuser: _default
+
+      - name: Generate certificates
+        community.crypto.x509_certificate:
+          path: '{{ pulp_certs_dir }}/pulp_webserver.crt'
+          csr_path: '{{ pulp_certs_dir }}/pulp_webserver.csr'
+          privatekey_path: '{{ pulp_certs_dir }}/pulp_webserver.key'
+          provider: ownca
+          ownca_path: '{{ pulp_certs_dir }}/root.crt'
+          ownca_privatekey_path: '{{ pulp_certs_dir }}/root.key'
+          ownca_not_after: '+824d'
+          owner: root
+          group: "{{ pulp_group | default('root') }}"
+          serole: _default
+          setype: _default
+          seuser: _default
+
+  - name: Cleanup CSR files
+    file:
+      path: '{{ pulp_certs_dir }}/{{ __pulp_webserver_csr_path }}'
+      state: absent
+    loop:
+      - pulp_webserver.csr
+    loop_control:
+      loop_var: __pulp_webserver_csr_path
+
+
